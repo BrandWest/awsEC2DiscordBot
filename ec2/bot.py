@@ -7,7 +7,7 @@ import traceback
 import logging
 
 logging.basicConfig(
-    format='%(asctime)s,%(msecs)03d\t %(levelname)-8s\t %(filename)s\t%(lineno)d\t %(message)s',
+    format='%(asctime)s\t %(levelname)-8s\t %(filename)s\t%(lineno)d\t %(message)s',
     datefmt='%Y-%m-%d:%H:%M:%S',
     level=logging.INFO
 )
@@ -21,10 +21,6 @@ ec2 = boto3.resource('ec2')
 @client.event
 async def on_ready():
     log.info(f"Logged in as: {client.user.name} user id: {client.user.id}")
-    # print('Logged in as')
-    # print(client.user.name)
-    # print(client.user.id)
-    # print('------------')
 
 @client.event
 async def on_message(message):
@@ -32,10 +28,8 @@ async def on_message(message):
     instances = list(ec2.instances.filter(Filters=[{'Name':'tag:guild', 'Values': [str(message.channel.guild.id)]}]))
     try:
         log.info(f"Instance: {str(instances[0])}. Number of matches: {str(len(instances))}")
-        # print('Acting on ' + str(instances[0]) + ' (' + str(len(instances)) + ' matching instances)')
     except Exception as error:
         log.error(f"Failed to act on instance. Error {error}")
-        # print(f"Failed to act on instance {error}")
     # assume that there will never be more than one matching instance
     if client.user.id in memberIDs and len(instances) > 0:
         
@@ -77,16 +71,14 @@ async def on_message(message):
         else: 
             await message.channel.send('Server start/stop bot. Commands are `start`, `stop`, `state`, `reboot` and `info`')            
     else:
-        # print('Attempt to start bot by unrecognised guild ' + str(message.channel.guild.id) + "\n========================\n")
         log.error(f"Attempted to perform action by unrecognized guild {str(message.channel.guild.id)}")
-        # await message.channel.send('Unauthorized')
 
 def turnOffInstance(instance):
     try:
         instance.stop()
         return True
     except: 
-        print(traceback.format_exc())
+        log.error(traceback.format_exc())
         return False
 
 def turnOnInstance(instance):
@@ -94,7 +86,7 @@ def turnOnInstance(instance):
         instance.start()
         return True
     except:
-        print(traceback.format_exc())
+        log.error(traceback.format_exc())
         return False
 
 def getInstanceState(instance):
@@ -118,7 +110,7 @@ def rebootInstance(instance):
         instance.reboot()
         return True
     except:
-        print(traceback.format_exc())
+        log.error(traceback.format_exc())
         return False
 
 client.run(os.environ['AWSDISCORDTOKEN'])
