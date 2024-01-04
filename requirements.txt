@@ -1,3 +1,5 @@
 discord
 boto3
 awscli
+requests
+python-dotenv
