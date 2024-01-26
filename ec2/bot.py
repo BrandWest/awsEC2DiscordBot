@@ -7,6 +7,7 @@ import logging
 import requests
 import functools
 
+from mcstatus import JavaServer
 from dotenv import load_dotenv
 from time import sleep
 
@@ -28,7 +29,7 @@ client = discord.Client(intents=intents)
 
 #EC2 service
 ec2 = boto3.resource('ec2')
-
+ssm = boto3.client('ssm')
 #State user info
 @client.event
 async def on_ready():
@@ -64,6 +65,7 @@ async def on_message(message):
         # attempt to start the EC2 instance
         elif 'start' in message.content:
             #Check for ready state
+            log.info(f"Checking state of the instance. State: {instances[0].state}")
             if getInstanceState(instances[0]) == "ready":
                 await message.channel.send('AWS Instance already running.')
             #Check for not ready
@@ -77,6 +79,7 @@ async def on_message(message):
                 await message.channel.send('Error starting AWS Instance')
         #Get the state of the machine
         elif 'state' in message.content:
+            log.info(f"Checking state of the instance. State: {instances[0].state}")
             await message.channel.send('AWS Instance state is: ' + getInstanceState(instances[0]))
         #Reboot if you have proper permissions TODO: Add threading
         elif 'reboot' in message.content:
@@ -98,10 +101,26 @@ async def on_message(message):
                     await message.channel.send(f"DNS Record not updated.")                
             else: #The server isn't running
                 await message.channel.send(f"Server not started. Instance state: {instances[0].state['Name']}")
+        elif 'players' in message.content:
+            players_online, player_names, latency = list_players()
+            await message.channel.send(f"There are: {players_online} online. The following players are online: {', '.join(player_names)}")
         else: #Unknown command
-            await message.channel.send('Server start/stop bot. Commands are `start`, `stop`, `state`, `reboot`, `update_record`, and `info`')
+            await message.channel.send('Server bot commands are `start`, `stop`, `state`, `players`, `update_record`, and `info`. Example: @CIRC_MC_SERVER <command>')
+
     else: #Not a recognized guild
         log.error(f"Attempted to perform action by unrecognized guild {str(message.channel.guild.id)}")
+
+
+
+def list_players():
+    server = JavaServer.lookup("circ-mc.brandonwest.tech")
+    status = server.status()
+    query = server.query()
+
+    return status.players.online, query.players.names, status.latency
+
+def safelyShutdown(instance):
+    pass
 
 #Perform the dns updated
 def updateDNSRecord(instance):
@@ -170,13 +189,16 @@ def turnOnInstance(instance, guild_id):
         instance.start() #Attempt to start the machine
         log.info(f"Checking state: {instance.state['Name']}")
         while instance.state['Name'].lower() != "running": #As long as its not running
-            log.info(f"Checking state: {instance.state['Name']}")
             sleep(10) #not to spam
             instances = list(ec2.instances.filter(Filters=[{'Name':'tag:guild', 'Values': guild_id}])) #Performs the update of the instance for the thread
+            log.info(f"Checking state: {instance.state['Name']}")
             instance = instances[0]
         sleep(5)# Slight pause to update the dns record.
-        updateDNSRecord(instance)
-        return True
+        if updateDNSRecord(instance):
+            return True
+        else:
+            log.error("Unable to update the DNS record")
+            return False
     except:
         log.error(traceback.format_exc())
         return False
